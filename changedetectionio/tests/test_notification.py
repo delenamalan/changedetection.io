@@ -284,12 +284,16 @@ def test_notification_custom_endpoint_and_jinja2(client, live_server):
     # https://github.com/caronc/apprise/wiki/Notify_Custom_JSON#header-manipulation
     test_notification_url = url_for('test_notification_endpoint', _external=True).replace('http://', 'post://')+"?xxx={{ watch_url }}&+custom-header=123"
 
+    test_items = json.dumps([
+        {'title': 'product 1', 'price': 100},
+        {'title': 'product 2', 'price': 200},
+    ])
     res = client.post(
         url_for("settings_page"),
         data={
               "application-fetch_backend": "html_requests",
               "application-minutes_between_check": 180,
-              "application-notification_body": '{ "url" : "{{ watch_url }}", "secret": 444 }',
+              "application-notification_body": '{ "url" : "{{ watch_url }}", "secret": 444, "products": [{% for item in {{ current_snapshot }}|fromjson %} "{{ item.title }} - {{ item.price }}" {% endfor %}] }',
               "application-notification_format": default_notification_format,
               "application-notification_urls": test_notification_url,
               # https://github.com/caronc/apprise/wiki/Notify_Custom_JSON#get-parameter-manipulation
@@ -297,6 +301,7 @@ def test_notification_custom_endpoint_and_jinja2(client, live_server):
               },
         follow_redirects=True
     )
+    # TOOD: check contents
     assert b'Settings updated' in res.data
 
     # Add a watch and trigger a HTTP POST
@@ -310,7 +315,7 @@ def test_notification_custom_endpoint_and_jinja2(client, live_server):
     assert b"Watch added" in res.data
 
     wait_for_all_checks(client)
-    set_modified_response()
+    set_modified_response(test_items)
 
     client.get(url_for("form_watch_checknow"), follow_redirects=True)
     wait_for_all_checks(client)
